@@ -1,9 +1,14 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 from app.database import SessionLocal
 from app.models import Funcionario
 
 router = APIRouter()
+
+class FuncionarioSchema(BaseModel):
+    nome: str
+    cargo: str
 
 def get_db():
     db = SessionLocal()
@@ -13,10 +18,10 @@ def get_db():
         db.close()
 
 @router.post("/funcionarios")
-def criar_funcionario(data: dict, db: Session = Depends(get_db)):
+def criar_funcionario(data: FuncionarioSchema, db: Session = Depends(get_db)):
     funcionario = Funcionario(
-        nome=data["nome"],
-        cargo=data["cargo"]
+        nome=data.nome,
+        cargo=data.cargo
     )
     db.add(funcionario)
     db.commit()

@@ -1,11 +1,21 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from typing import Optional
 from app.database import SessionLocal
 from app.models import Performance, Feedback, Funcionario
 from app.services.performance_service import calcular_score, classificar, decidir_fluxo
 from app.services.ai_service import gerar_feedback
 
 router = APIRouter()
+
+class AvaliacaoSchema(BaseModel):
+    funcionario_id: int
+    metas: float
+    prazos: float
+    qualidade: float
+    trabalho_equipe: float
+    observacoes: Optional[str] = ""
 
 def get_db():
     db = SessionLocal()
@@ -15,24 +25,18 @@ def get_db():
         db.close()
 
 @router.post("/avaliacoes")
-def criar_avaliacao(data: dict, db: Session = Depends(get_db)):
-    funcionario = db.query(Funcionario).filter(Funcionario.id == data["funcionario_id"]).first()
+def criar_avaliacao(data: AvaliacaoSchema, db: Session = Depends(get_db)):
+    funcionario = db.query(Funcionario).filter(Funcionario.id == data.funcionario_id).first()
 
     if not funcionario:
         return {"erro": "Funcionário não encontrado"}
 
-    metas = data.get("metas", 0)
-    prazos = data.get("prazos", 0)
-    qualidade = data.get("qualidade", 0)
-    trabalho_equipe = data.get("trabalho_equipe", 0)
-    observacoes = data.get("observacoes", "")
-
-    score = calcular_score(metas, prazos, qualidade, trabalho_equipe)
+    score = calcular_score(data.metas, data.prazos, data.qualidade, data.trabalho_equipe)
 
     performance = Performance(
         funcionario_id=funcionario.id,
         score=score,
-        observacoes=observacoes
+        observacoes=data.observacoes
     )
     db.add(performance)
     db.commit()
@@ -42,12 +46,12 @@ def criar_avaliacao(data: dict, db: Session = Depends(get_db)):
     fluxo = decidir_fluxo(classificacao)
 
     dados_avaliacao = f"""
-    Metas atingidas: {metas}%
-    Prazos cumpridos: {prazos}%
-    Qualidade: {qualidade}%
-    Trabalho em equipe: {trabalho_equipe}%
+    Metas atingidas: {data.metas}%
+    Prazos cumpridos: {data.prazos}%
+    Qualidade: {data.qualidade}%
+    Trabalho em equipe: {data.trabalho_equipe}%
     Score geral: {score:.1f}
-    Observações: {observacoes}
+    Observações: {data.observacoes}
     """
 
     texto_ia = gerar_feedback(funcionario.nome, score, dados_avaliacao)
